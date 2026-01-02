@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互動式活動摸彩系統</title>
+    <!-- 匯入 Confetti 特效庫 (CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- 匯入 html2canvas 截圖庫 (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --main-bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --primary-color: #3b82f6;
+            --text-color: #1f2937;
+            --accent-color: #ef4444;
+            --border-radius: 12px;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--main-bg-color);
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            color: var(--text-color);
+            transition: background-color 0.3s, color 0.3s;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- 頂部導航 --- */
+        header {
+            text-align: center;
+            padding: 1rem;
+            position: relative;
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            z-index: 100;
+            flex-shrink: 0;
+            border-radius: 0 0 16px 16px;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            color: var(--primary-color);
+            font-weight: 800;
+            text-shadow: 2px 2px 4px rgba(255,255,255,0.5);
+        }
+
+        .settings-btn {
+            position: absolute;
+            top: 50%;
+            right: 1.5rem;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.8rem;
+            opacity: 0.7;
+            transition: 0.3s;
+        }
+        .settings-btn:hover { opacity: 1; transform: translateY(-50%) rotate(90deg); }
+
+        /* --- 主容器 --- */
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 20px;
+            overflow-y: auto;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* --- 抽獎主舞台 --- */
+        .stage {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            padding: 2rem;
+            text-align: center;
+            width: 90%;
+            max-width: 800px;
+            margin-bottom: 2rem;
+            border: 3px solid var(--primary-color);
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .current-prize-info {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-color);
+            font-weight: bold;
+        }
+        .current-prize-info span { color: var(--accent-color); }
+
+        .rolling-display {
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            font-weight: bold;
+            height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(248, 250, 252, 0.9); /* 稍微透明 */
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+            color: var(--primary-color);
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+            border: 1px dashed #cbd5e1;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        button:active { transform: scale(0.98); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .btn-primary { background-color: var(--primary-color); color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-secondary { background-color: #64748b; color: white; }
+        .btn-bonus { background-color: #f59e0b; color: white; box-shadow: 0 4px 6px rgba(245, 158, 11, 0.3); }
+        .btn-success { background-color: #10b981; color: white; }
+        .btn-danger { background-color: var(--accent-color); color: white; }
+        .btn-info { background-color: #0ea5e9; color: white; }
+
+        /* --- 工具列 --- */
+        .toolbar {
+            width: 90%;
+            max-width: 1000px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        /* --- 中獎名單區 --- */
+        .winners-section {
+            width: 90%;
+            max-width: 1000px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            padding-bottom: 2rem;
+        }
+
+        .prize-group {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            border-top: 5px solid var(--primary-color);
+            animation: fadeIn 0.5s ease;
+        }
+
+        .prize-group h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            color: var(--text-color);
+        }
+
+        .winner-list { list-style: none; padding: 0; margin: 0; }
+
+        .winner-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px dashed #eee;
+            color: var(--text-color);
+        }
+        .winner-item:last-child { border-bottom: none; }
+
+        .winner-name { font-size: 1.2rem; font-weight: 600; }
+        
+        .redraw-btn {
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            cursor: pointer;
+            color: #6b7280;
+            padding: 6px;
+            border-radius: 50%;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+        }
+        .redraw-btn:hover { background-color: #fee2e2; color: #ef4444; border-color: #fecaca; }
+        .redraw-btn svg { width: 20px; height: 20px; }
+
+        /* --- Modal (通用) --- */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .modal.active { display: flex; opacity: 1; }
+
+        .modal-content {
+            background: white;
+            padding: 0;
+            border-radius: var(--border-radius);
+            width: 90%;
+            max-width: 900px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f9fafb;
+            color: #1f2937; /* Modal 固定淺色背景，文字深色 */
+        }
+        .modal-header h2 { margin: 0; font-size: 1.5rem; }
+        .close-modal {
+            background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #6b7280; padding: 0;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            color: #1f2937;
+        }
+
+        /* --- Tabs 設計 --- */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
+            padding: 0 1.5rem;
+        }
+        .tab-btn {
+            padding: 1rem 1.5rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+            border-bottom: 3px solid transparent;
+            font-weight: 600;
+            color: #6b7280;
+            transition: 0.2s;
+            border-radius: 0;
+        }
+        .tab-btn:hover { color: var(--primary-color); }
+        .tab-btn.active { border-bottom-color: var(--primary-color); color: var(--primary-color); background: #fff; border-radius: 8px 8px 0 0; }
+        
+        .tab-content { display: none; padding-top: 1rem; }
+        .tab-content.active { display: block; }
+
+        /* --- 表單元件 --- */
+        .form-group { margin-bottom: 1.5rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; font-weight: bold; color: #374151; }
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .form-control:focus { outline: none; border-color: var(--primary-color); ring: 2px var(--primary-color); }
+        
+        .prize-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .prize-row input[type="text"] { flex: 8; }
+        .prize-row input[type="number"] { flex: 2; }
+        
+        .btn-icon { 
+            padding: 8px 12px; 
+            border-radius: 4px; 
+            background: #fee2e2; 
+            color: #ef4444; 
+            border: none; 
+            cursor: pointer;
+            flex-shrink: 0; 
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+        }
+        .btn-icon:hover { background: #fecaca; }
+
+        /* 主題按鈕網格 */
+        .theme-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .theme-btn {
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 10px;
+            cursor: pointer;
+            text-align: center;
+            transition: 0.2s;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+        }
+        .theme-btn:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .theme-btn.active { border-color: var(--primary-color); background: #eff6ff; }
+        
+        .color-preview {
+            width: 100%;
+            height: 40px;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            display: flex;
+            overflow: hidden;
+        }
+        .color-preview div { flex: 1; height: 100%; }
+
+        .help-box {
+            background: #eff6ff;
+            border: 1px solid #dbeafe;
+            padding: 1rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: #1e40af;
+            margin-top: 10px;
+            line-height: 1.5;
+        }
+        .help-box ol { margin: 0.5rem 0 0 1.2rem; padding: 0; }
+
+        /* RWD */
+        @media (max-width: 600px) {
+            .tabs { flex-direction: column; padding: 0; }
+            .tab-btn { width: 100%; text-align: left; border-bottom: 1px solid #eee; }
+            .tab-btn.active { border-bottom: 3px solid var(--primary-color); border-radius: 0; }
+            .controls { flex-direction: column; }
+            button { width: 100%; justify-content: center; }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- 音效區 -->
+<audio id="rolling-sound" src="https://hsuliang.github.io/rool5.mp3" preload="auto" loop></audio>
+<audio id="winner-sound" src="https://hsuliang.github.io/happy.mp3" preload="auto"></audio>
+
+<header>
+    <h1 id="main-title">年度活動摸彩大會</h1>
+    <button class="settings-btn" onclick="openSettings()" title="設定">⚙️</button>
+</header>
+
+<div class="container" id="capture-area">
+    <!-- 抽獎舞台 -->
+    <div class="stage" id="main-stage">
+        <div class="current-prize-info" id="current-prize-display">準備中...</div>
+        <div class="rolling-display" id="rolling-box">等待開始</div>
+        
+        <div class="controls" data-html2canvas-ignore>
+            <button id="btn-draw-one" class="btn-primary" onclick="startDraw('one')">
+                <span>🎲</span> 逐一開獎
+            </button>
+            <button id="btn-draw-all" class="btn-secondary" onclick="startDraw('all')">
+                <span>🚀</span> 一次抽完本獎項
+            </button>
+            <button id="btn-bonus" class="btn-bonus" onclick="openBonusModal()">
+                <span>🎁</span> 臨時加碼
+            </button>
+        </div>
+        <div style="margin-top: 15px; color: #6b7280; font-size: 0.9rem;">
+            剩餘名單人數: <span id="pool-count" style="font-weight:bold; color:var(--primary-color);">0</span> 人
+        </div>
+    </div>
+
+    <!-- 工具列 -->
+    <div class="toolbar" data-html2canvas-ignore>
+        <button class="btn-info" onclick="saveScreenshot()">
+            📸 截圖存檔
+        </button>
+        <button class="btn-success" onclick="exportCSV()">
+            📊 匯出 CSV
+        </button>
+    </div>
+
+    <!-- 中獎名單展示區 -->
+    <div class="winners-section" id="winners-container">
+        <!-- JS 動態生成 -->
+    </div>
+</div>
+
+<!-- ================= 設定面板 (Modal) ================= -->
+<div class="modal" id="settings-modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>⚙️ 設定與管理</h2>
+            <button class="close-modal" onclick="closeSettings()">✕</button>
+        </div>
+        
+        <!-- Tabs 導航 -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tab-list')">名單設定</button>
+            <button class="tab-btn" onclick="switchTab('tab-prizes')">獎項設定</button>
+            <button class="tab-btn" onclick="switchTab('tab-appearance')">外觀與音效</button>
+            <button class="tab-btn" onclick="switchTab('tab-template')">範本存取</button>
+        </div>
+
+        <div class="modal-body">
+            <!-- Tab 1: 名單設定 -->
+            <div id="tab-list" class="tab-content active">
+                <div class="form-group">
+                    <label>請選擇匯入方式：</label>
+                    <div style="display:flex; gap:10px; margin-bottom:15px;">
+                        <button class="btn-secondary" style="flex:1;" onclick="showSubMode('manual')">A. 自訂名單</button>
+                        <button class="btn-secondary" style="flex:1;" onclick="showSubMode('sheet-link')">B. 共用連結</button>
+                        <button class="btn-secondary" style="flex:1;" onclick="showSubMode('csv-link')">C. 雲端名單</button>
+                    </div>
+
+                    <!-- Mode A: 手動 -->
+                    <div id="mode-manual" class="import-mode">
+                        <textarea id="names-input" class="form-control" rows="8" placeholder="請直接貼上姓名&#10;王小明, 李大同&#10;張三&#10;李四"></textarea>
+                        <p style="color:#666; font-size:0.9rem; margin-top:5px;">💡 支援逗號 (,) 或換行分隔。</p>
+                        <button class="btn-primary" onclick="processManualNames()" style="width:100%;">檢查並儲存名單</button>
+                    </div>
+
+                    <!-- Mode B: 共用連結 -->
+                    <div id="mode-sheet-link" class="import-mode" style="display:none;">
+                        <label>1. Google 試算表共用網址</label>
+                        <input type="text" id="sheet-url-b" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/..." style="margin-bottom:10px;">
+                        
+                        <div style="display:flex; gap:10px; margin-bottom:10px;">
+                            <div style="flex:1;">
+                                <label>2. 工作表名稱</label>
+                                <input type="text" id="sheet-name-b" class="form-control" value="工作表1">
+                            </div>
+                            <div style="flex:1;">
+                                <label>3. 名單欄位名稱</label>
+                                <input type="text" id="col-name-b" class="form-control" value="姓名">
+                            </div>
+                        </div>
+                        <button class="btn-primary" onclick="importFromSheet('shared')" style="width:100%;">匯入名單</button>
+                    </div>
+
+                    <!-- Mode C: CSV 連結 -->
+                    <div id="mode-csv-link" class="import-mode" style="display:none;">
+                        <label>發布到網路的 CSV 網址</label>
+                        <input type="text" id="sheet-url-c" class="form-control" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" style="margin-bottom:10px;">
+                        
+                        <label>名單欄位名稱</label>
+                        <input type="text" id="col-name-c" class="form-control" value="姓名" style="margin-bottom:10px;">
+                        
+                        <button class="btn-primary" onclick="importFromSheet('csv')" style="width:100%;">匯入名單</button>
+
+                        <div class="help-box">
+                            <strong>📚 如何取得「發布到網路」的 CSV 網址？</strong>
+                            <ol>
+                                <li>點擊試算表左上角：<strong>檔案 > 分享 > 發布到網路</strong>。</li>
+                                <li>確認選擇「連結」分頁。</li>
+                                <li>選擇您的名單所在「工作表」。</li>
+                                <li>將格式改為「<strong>逗號分隔 (.csv)</strong>」。</li>
+                                <li>點擊「發布」，複製產生的網址貼上即可。</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: 獎項設定 -->
+            <div id="tab-prizes" class="tab-content">
+                <div class="form-group">
+                    <label>獎項列表 (拖曳排序功能暫略，請依順序輸入)</label>
+                    <div id="prize-list-settings"></div>
+                    <button class="btn-success" onclick="addPrizeInputRow()" style="margin-top:10px;">+ 新增獎項</button>
+                </div>
+            </div>
+
+            <!-- Tab 3: 外觀與音效 -->
+            <div id="tab-appearance" class="tab-content">
+                
+                <div class="form-group">
+                    <label>活動主標題</label>
+                    <input type="text" id="setting-title" class="form-control" value="年度活動摸彩大會" oninput="updateUI()">
+                </div>
+
+                <div class="form-group">
+                    <label>預設主題配置 (點選套用)</label>
+                    <div class="theme-grid">
+                        <div class="theme-btn active" onclick="applyTheme(0, this)">
+                            <div class="color-preview">
+                                <div style="background:#f0f2f5"></div>
+                                <div style="background:#3b82f6"></div>
+                            </div>
+                            <span>經典藍白</span>
+                        </div>
+                        <div class="theme-btn" onclick="applyTheme(1, this)">
+                            <div class="color-preview">
+                                <div style="background:#fff1f2"></div>
+                                <div style="background:#e11d48"></div>
+                            </div>
+                            <span>喜氣洋洋</span>
+                        </div>
+                        <div class="theme-btn" onclick="applyTheme(2, this)">
+                            <div class="color-preview">
+                                <div style="background:#0f172a"></div>
+                                <div style="background:#fbbf24"></div>
+                            </div>
+                            <span>暗夜金爵</span>
+                        </div>
+                        <div class="theme-btn" onclick="applyTheme(3, this)">
+                            <div class="color-preview">
+                                <div style="background:#f0fdf4"></div>
+                                <div style="background:#16a34a"></div>
+                            </div>
+                            <span>清新森林</span>
+                        </div>
+                        <div class="theme-btn" onclick="applyTheme(4, this)">
+                            <div class="color-preview">
+                                <div style="background:#faf5ff"></div>
+                                <div style="background:#9333ea"></div>
+                            </div>
+                            <span>神秘幻紫</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>自訂配色 (選擇上方主題後可再微調)</label>
+                    <div style="display: flex; gap: 20px; align-items: center;">
+                        <div>
+                            <span style="font-size:0.9rem; color:#666; display:block; margin-bottom:5px;">背景底色</span>
+                            <input type="color" id="setting-bg-color" value="#f0f2f5" oninput="updateUI()" style="width:80px; height:40px;">
+                        </div>
+                        <div>
+                            <span style="font-size:0.9rem; color:#666; display:block; margin-bottom:5px;">按鈕主色</span>
+                            <input type="color" id="setting-main-color" value="#3b82f6" oninput="updateUI()" style="width:80px; height:40px;">
+                        </div>
+                        <div>
+                            <span style="font-size:0.9rem; color:#666; display:block; margin-bottom:5px;">文字顏色</span>
+                            <input type="color" id="setting-text-color" value="#1f2937" oninput="updateUI()" style="width:80px; height:40px;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>背景圖片設定</label>
+                    <input type="file" id="bg-upload" accept="image/*" class="form-control" onchange="handleImageUpload(event)">
+                    <p style="color:#666; font-size:0.85rem; margin-top:5px;">
+                        💡 建議尺寸：1920x1080 (桌面版)，檔案大小建議小於 2MB。圖片將會覆蓋背景顏色。
+                    </p>
+                    <button class="btn-secondary" onclick="clearBgImage()" style="margin-top:5px; padding:6px 12px; font-size:0.9rem;">🗑️ 清除背景圖片</button>
+                </div>
+
+                <div class="form-group">
+                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                        <input type="checkbox" id="setting-sound" checked style="width:20px; height:20px;">
+                        啟用音效 (抽獎與中獎聲)
+                    </label>
+                </div>
+            </div>
+
+            <!-- Tab 4: 範本存取 -->
+            <div id="tab-template" class="tab-content">
+                <p>您可以將目前的「標題、獎項、外觀」設定儲存起來，下次開啟時直接載入。</p>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn-primary" onclick="saveTemplate()">💾 儲存目前設定為範本</button>
+                    <button class="btn-secondary" onclick="loadTemplate()">📂 載入上次範本</button>
+                    <button class="btn-danger" onclick="clearTemplate()">🗑️ 清除範本</button>
+                </div>
+                <p id="template-msg" style="margin-top:10px; color:green;"></p>
+                <p style="font-size:0.85rem; color:#666;">注意：背景圖片因檔案較大，不會儲存在範本中。</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 加碼 Modal -->
+<div class="modal" id="bonus-modal">
+    <div class="modal-content" style="max-width: 400px; overflow: visible;">
+        <div class="modal-header">
+            <h2>🎁 臨時加碼</h2>
+            <button class="close-modal" onclick="closeBonusModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>加碼獎項名稱</label>
+                <input type="text" id="bonus-name" class="form-control" value="總經理紅包">
+            </div>
+            <div class="form-group">
+                <label>數量</label>
+                <input type="number" id="bonus-count" class="form-control" value="1" min="1">
+            </div>
+            <button class="btn-bonus" style="width: 100%;" onclick="confirmBonus()">確認加碼並優先抽出</button>
+        </div>
+    </div>
+</div>
+
+<!-- 系統通用提示 Modal (取代原生的 alert/confirm) -->
+<div class="modal" id="system-dialog">
+    <div class="modal-content" style="max-width: 400px;">
+        <div class="modal-header">
+            <h3 id="sys-dialog-title">提示</h3>
+            <button class="close-modal" onclick="closeSystemDialog()">✕</button>
+        </div>
+        <div class="modal-body" style="text-align: center;">
+            <p id="sys-dialog-msg" style="margin-bottom: 20px; font-size: 1.1rem; color: #333;"></p>
+            <div style="display: flex; gap: 10px; justify-content: center;">
+                <button class="btn-secondary" id="sys-btn-cancel" onclick="closeSystemDialog()">取消</button>
+                <button class="btn-primary" id="sys-btn-confirm">確定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    /**
+     * 程式核心邏輯
+     */
+
+    // --- 全域狀態 ---
+    let state = {
+        title: "年度活動摸彩大會",
+        prizes: [
+            { name: "三獎", count: 10, winners: [] },
+            { name: "二獎", count: 5, winners: [] },
+            { name: "首獎", count: 1, winners: [] }
+        ],
+        namePool: [], // 尚未中獎名單
+        currentPrizeIndex: 0, 
+        isRolling: false,
+        soundEnabled: true,
+        colors: {
+            bg: "#f0f2f5",
+            primary: "#3b82f6",
+            text: "#1f2937",
+            card: "#ffffff"
+        }
+    };
+
+    const audioRoll = document.getElementById('rolling-sound');
+    const audioWin = document.getElementById('winner-sound');
+    let rollInterval;
+
+    // --- 初始化 ---
+    window.onload = function() {
+        const saved = localStorage.getItem('luckyDrawTemplate');
+        if (saved) {
+            // 自動載入設定，不打擾使用者
+        }
+        
+        updateUI();
+        renderPrizeInputs();
+        updateStageInfo();
+        
+        switchTab('tab-list');
+    };
+
+    // --- 系統對話框功能 (取代 alert/confirm) ---
+    function showDialog(title, msg, showCancel, callback) {
+        document.getElementById('sys-dialog-title').innerText = title;
+        document.getElementById('sys-dialog-msg').innerText = msg;
+        
+        const btnCancel = document.getElementById('sys-btn-cancel');
+        const btnConfirm = document.getElementById('sys-btn-confirm');
+        
+        btnCancel.style.display = showCancel ? 'block' : 'none';
+        
+        // 移除舊的 event listener，避免重複綁定
+        const newBtn = btnConfirm.cloneNode(true);
+        btnConfirm.parentNode.replaceChild(newBtn, btnConfirm);
+        
+        newBtn.onclick = function() {
+            closeSystemDialog();
+            if (callback) callback();
+        };
+
+        // 如果只是普通 alert (沒有 callback 且沒有 cancel)，確認鍵功能為關閉
+        if (!callback && !showCancel) {
+             newBtn.onclick = closeSystemDialog;
+        }
+
+        document.getElementById('system-dialog').classList.add('active');
+    }
+
+    function closeSystemDialog() {
+        document.getElementById('system-dialog').classList.remove('active');
+    }
+
+    // 封裝成類似原生的介面
+    function showAlert(msg) {
+        showDialog("提示", msg, false, null);
+    }
+    
+    function showConfirm(msg, callback) {
+        showDialog("確認", msg, true, callback);
+    }
+
+
+    // --- UI 控制 ---
+    function openSettings() {
+        document.getElementById('settings-modal').classList.add('active');
+        renderPrizeInputs();
+    }
+    function closeSettings() {
+        document.getElementById('settings-modal').classList.remove('active');
+        parsePrizeInputs();
+        updateStageInfo();
+        renderWinnersArea();
+    }
+
+    // 主題設定定義
+    const themes = [
+        { name: "經典藍白", bg: "#f0f2f5", primary: "#3b82f6", text: "#1f2937", card: "#ffffff" },
+        { name: "喜氣洋洋", bg: "#fff1f2", primary: "#e11d48", text: "#881337", card: "#ffffff" },
+        { name: "暗夜金爵", bg: "#0f172a", primary: "#fbbf24", text: "#f1f5f9", card: "#1e293b" }, // 深色模式
+        { name: "清新森林", bg: "#f0fdf4", primary: "#16a34a", text: "#064e3b", card: "#ffffff" },
+        { name: "神秘幻紫", bg: "#faf5ff", primary: "#9333ea", text: "#581c87", card: "#ffffff" }
+    ];
+
+    function applyTheme(index, btnElement) {
+        const t = themes[index];
+        state.colors = { ...t };
+        
+        // 更新輸入框
+        document.getElementById('setting-bg-color').value = t.bg;
+        document.getElementById('setting-main-color').value = t.primary;
+        document.getElementById('setting-text-color').value = t.text;
+        
+        // UI 狀態更新
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+        if(btnElement) btnElement.classList.add('active');
+
+        // 清除背景圖 (因為選擇了主題色)
+        clearBgImage();
+        
+        updateUI();
+    }
+
+    function handleImageUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+            showAlert("⚠️ 圖片大小超過 2MB，可能會影響網頁效能，建議壓縮後再上傳。");
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.body.style.backgroundImage = `url('${e.target.result}')`;
+            // 移除目前選中的主題樣式，因為已經自訂背景
+            document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function clearBgImage() {
+        document.body.style.backgroundImage = 'none';
+        document.getElementById('bg-upload').value = '';
+    }
+
+    function updateUI() {
+        state.title = document.getElementById('setting-title').value;
+        // 如果使用者手動改顏色，更新 state
+        state.colors.bg = document.getElementById('setting-bg-color').value;
+        state.colors.primary = document.getElementById('setting-main-color').value;
+        state.colors.text = document.getElementById('setting-text-color').value;
+        state.soundEnabled = document.getElementById('setting-sound').checked;
+
+        // 應用 CSS 變數
+        document.getElementById('main-title').innerText = state.title;
+        document.body.style.setProperty('--main-bg-color', state.colors.bg);
+        document.body.style.setProperty('--primary-color', state.colors.primary);
+        document.body.style.setProperty('--text-color', state.colors.text);
+        document.body.style.setProperty('--card-bg', state.colors.card);
+        
+        document.querySelector('.stage').style.borderColor = state.colors.primary;
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        const content = document.getElementById(tabId);
+        if (content) content.classList.add('active');
+
+        const buttons = document.querySelectorAll('.tab-btn');
+        buttons.forEach(btn => {
+            const onClickAttr = btn.getAttribute('onclick');
+            if (onClickAttr && onClickAttr.includes(tabId)) {
+                btn.classList.add('active');
+            }
+        });
+    }
+
+    function showSubMode(mode) {
+        document.querySelectorAll('.import-mode').forEach(el => el.style.display = 'none');
+        document.getElementById('mode-' + mode).style.display = 'block';
+    }
+
+    // --- 獎項管理 ---
+    function renderPrizeInputs() {
+        const container = document.getElementById('prize-list-settings');
+        container.innerHTML = '';
+        state.prizes.forEach((prize, index) => {
+            const div = document.createElement('div');
+            div.className = 'prize-row';
+            div.innerHTML = `
+                <span style="font-weight:bold; color:#999; width:20px;">${index+1}.</span>
+                <input type="text" class="form-control" value="${prize.name}" placeholder="獎項名稱" oninput="updatePrizeData(${index}, 'name', this.value)">
+                <input type="number" class="form-control" value="${prize.count}" placeholder="數量" oninput="updatePrizeData(${index}, 'count', this.value)">
+                <button class="btn-icon" onclick="removePrizeRow(${index})" title="刪除">✕</button>
+            `;
+            container.appendChild(div);
+        });
+    }
+    function addPrizeInputRow() {
+        state.prizes.push({ name: "新獎項", count: 1, winners: [] });
+        renderPrizeInputs();
+    }
+    function removePrizeRow(index) {
+        showConfirm("確定刪除此獎項？已產生的中獎名單也會消失喔！", () => {
+             state.prizes.splice(index, 1);
+             renderPrizeInputs();
+        });
+    }
+    function updatePrizeData(index, field, value) {
+        if (field === 'count') value = parseInt(value) || 1;
+        state.prizes[index][field] = value;
+    }
+    function parsePrizeInputs() {
+        let found = false;
+        for(let i=0; i<state.prizes.length; i++) {
+            if (state.prizes[i].winners.length < state.prizes[i].count) {
+                state.currentPrizeIndex = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) state.currentPrizeIndex = state.prizes.length; 
+    }
+
+    // --- 名單匯入邏輯 ---
+    function setNames(list) {
+        const uniqueSet = new Set(list.map(n => n.trim()).filter(n => n));
+        const uniqueList = Array.from(uniqueSet);
+        const duplicateCount = list.length - uniqueList.length;
+
+        if (uniqueList.length === 0) {
+            showAlert("名單是空的！");
+            return;
+        }
+
+        if (duplicateCount > 0) {
+             document.getElementById('sys-dialog-title').innerText = "重複名單處理";
+             document.getElementById('sys-dialog-msg').innerText = `偵測到 ${duplicateCount} 筆重複資料，是否自動移除？`;
+             
+             const btnCancel = document.getElementById('sys-btn-cancel');
+             const btnConfirm = document.getElementById('sys-btn-confirm');
+             btnCancel.style.display = 'block';
+             btnCancel.innerText = "保留重複"; 
+             btnConfirm.innerText = "移除重複";
+
+             const newConfirm = btnConfirm.cloneNode(true);
+             btnConfirm.parentNode.replaceChild(newConfirm, btnConfirm);
+             const newCancel = btnCancel.cloneNode(true);
+             btnCancel.parentNode.replaceChild(newCancel, btnCancel);
+
+             newConfirm.onclick = function() {
+                 state.namePool = uniqueList;
+                 finalizeNameSet();
+                 closeSystemDialog();
+                 resetDialogButtons();
+             };
+             newCancel.onclick = function() {
+                 state.namePool = list; 
+                 finalizeNameSet();
+                 closeSystemDialog();
+                 resetDialogButtons();
+             };
+
+             document.getElementById('system-dialog').classList.add('active');
+        } else {
+            state.namePool = uniqueList;
+            finalizeNameSet();
+        }
+    }
+
+    function resetDialogButtons() {
+        document.getElementById('sys-btn-cancel').innerText = "取消";
+        document.getElementById('sys-btn-confirm').innerText = "確定";
+    }
+
+    function finalizeNameSet() {
+        showAlert(`✅ 名單更新成功！目前共有 ${state.namePool.length} 人待抽。`);
+        updateStageInfo();
+        closeSettings();
+        document.getElementById('names-input').value = state.namePool.join('\n');
+    }
+
+    // Mode A: 手動
+    function processManualNames() {
+        const raw = document.getElementById('names-input').value;
+        const list = raw.split(/[,\n]/);
+        setNames(list);
+    }
+
+    // Mode B & C: 網路匯入
+    async function importFromSheet(type) {
+        let url, colName;
+        if (type === 'shared') {
+            const inputUrl = document.getElementById('sheet-url-b').value;
+            const sheetName = document.getElementById('sheet-name-b').value || '工作表1';
+            colName = document.getElementById('col-name-b').value;
+            const match = inputUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+            if (!match) return showAlert("網址格式錯誤，請確認是 Google 試算表網址");
+            const id = match[1];
+            url = `https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(sheetName)}`;
+        } else {
+            url = document.getElementById('sheet-url-c').value;
+            colName = document.getElementById('col-name-c').value;
+            if (!url) return showAlert("請輸入 CSV網址");
+        }
+
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("無法讀取，請確認權限是否為「公開」");
+            const text = await res.text();
+            parseCSVAndSetNames(text, colName);
+        } catch (e) {
+            showAlert("匯入失敗：" + e.message);
+        }
+    }
+
+    function parseCSVAndSetNames(csvText, targetColName) {
+        const rows = csvText.split(/\r?\n/);
+        if (rows.length < 2) return showAlert("CSV 內容似乎是空的或是格式錯誤");
+        const headers = rows[0].split(',').map(h => h.replace(/^"|"$/g, '').trim());
+        const colIndex = headers.indexOf(targetColName.trim());
+        if (colIndex === -1) {
+            return showAlert(`找不到標題為「${targetColName}」的欄位。\n偵測到的欄位：${headers.join(', ')}`);
+        }
+        const names = [];
+        for (let i = 1; i < rows.length; i++) {
+            let rowData = rows[i];
+            const regex = /,(?=(?:(?:[^"]*"){2})*[^"]*$)/; 
+            const cols = rowData.split(regex).map(c => c.replace(/^"|"$/g, '').trim());
+            if (cols[colIndex]) {
+                names.push(cols[colIndex]);
+            }
+        }
+        setNames(names);
+    }
+
+    // --- 抽獎與舞台邏輯 ---
+
+    // 按鈕動態文字資料庫 (修改為更具懸念的語句)
+    const blessingWords = [
+        "獎落誰家？", "就是你家？", "幸運兒是你嗎？", "準備好尖叫了嗎？", 
+        "下一個就是你！", "別懷疑，就是你！", "幸運女神降臨？", "看過來，大獎在這！", 
+        "心跳加速時刻", "是你嗎？是你嗎？", "大獎得主是...", "見證奇蹟的時刻"
+    ];
+
+    function getRandomBlessing() {
+        return blessingWords[Math.floor(Math.random() * blessingWords.length)];
+    }
+
+    function updateStageInfo() {
+        const poolCount = state.namePool.length;
+        document.getElementById('pool-count').innerText = poolCount;
+        
+        // 更新抽獎按鈕的吉祥話
+        const drawOneBtn = document.getElementById('btn-draw-one');
+        if (!state.isRolling) {
+            drawOneBtn.innerHTML = `<span>🎲</span> ${getRandomBlessing()}`;
+        }
+
+        if (state.currentPrizeIndex >= state.prizes.length) {
+            document.getElementById('current-prize-display').innerText = "🎉 活動圓滿結束 🎉";
+            document.getElementById('rolling-box').innerText = "感謝參與";
+            toggleButtons(false);
+            return;
+        }
+        const currentPrize = state.prizes[state.currentPrizeIndex];
+        const left = currentPrize.count - currentPrize.winners.length;
+        document.getElementById('current-prize-display').innerHTML = 
+            `正在抽選：<span>${currentPrize.name}</span> (尚缺 ${left} 名)`;
+        toggleButtons(poolCount > 0 && left > 0);
+    }
+
+    function toggleButtons(enable) {
+        const btns = ['btn-draw-one', 'btn-draw-all'];
+        btns.forEach(id => {
+            const btn = document.getElementById(id);
+            btn.disabled = !enable || state.isRolling;
+        });
+        document.getElementById('btn-bonus').disabled = state.isRolling;
+    }
+
+    function startDraw(mode) {
+        if (state.namePool.length === 0) return showAlert("名單沒人啦！");
+        if (state.isRolling) return;
+
+        state.isRolling = true;
+        toggleButtons(false);
+
+        // 鎖定按鈕文字避免變動
+        document.getElementById('btn-draw-one').innerHTML = `<span>🎲</span> 抽獎中...`;
+
+        if (state.soundEnabled) {
+            audioWin.pause(); audioWin.currentTime = 0;
+            audioRoll.play();
+        }
+
+        const box = document.getElementById('rolling-box');
+        rollInterval = setInterval(() => {
+            const rand = Math.floor(Math.random() * state.namePool.length);
+            box.innerText = state.namePool[rand];
+        }, 50);
+
+        setTimeout(() => {
+            stopDraw(mode);
+        }, 2000); 
+    }
+
+    function stopDraw(mode) {
+        clearInterval(rollInterval);
+        state.isRolling = false;
+
+        if (state.soundEnabled) {
+            audioRoll.pause(); audioRoll.currentTime = 0;
+            audioWin.play();
+        }
+
+        fireConfetti();
+
+        const currentPrize = state.prizes[state.currentPrizeIndex];
+        const remainingSlots = currentPrize.count - currentPrize.winners.length;
+        
+        let drawCount = 1;
+        if (mode === 'all') {
+            drawCount = remainingSlots;
+            if (state.namePool.length < drawCount) drawCount = state.namePool.length;
+        }
+
+        const newWinners = [];
+        for(let i=0; i<drawCount; i++) {
+            const randIndex = Math.floor(Math.random() * state.namePool.length);
+            const winner = state.namePool.splice(randIndex, 1)[0];
+            newWinners.push(winner);
+        }
+
+        currentPrize.winners.push(...newWinners);
+
+        const box = document.getElementById('rolling-box');
+        if (newWinners.length === 1) {
+            box.innerText = newWinners[0];
+            box.style.color = "var(--accent-color)";
+        } else {
+            box.innerText = `🎉 恭喜 ${newWinners.length} 位得主！`;
+            box.style.color = "var(--accent-color)";
+        }
+
+        renderWinnersArea();
+
+        if (currentPrize.winners.length >= currentPrize.count) {
+            state.currentPrizeIndex++;
+        }
+
+        setTimeout(() => {
+            box.style.color = "var(--primary-color)";
+            updateStageInfo();
+        }, 3000);
+    }
+
+    function renderWinnersArea() {
+        const container = document.getElementById('winners-container');
+        container.innerHTML = '';
+        state.prizes.forEach((prize, pIndex) => {
+            if (prize.winners.length === 0) return;
+            const group = document.createElement('div');
+            group.className = 'prize-group';
+            group.innerHTML = `<h3>${prize.name} <span>(${prize.winners.length}/${prize.count})</span></h3>`;
+            const ul = document.createElement('ul');
+            ul.className = 'winner-list';
+            [...prize.winners].reverse().forEach((winnerName, reverseIndex) => {
+                const realIndex = prize.winners.length - 1 - reverseIndex;
+                const li = document.createElement('li');
+                li.className = 'winner-item';
+                li.innerHTML = `
+                    <span class="winner-name">🏆 ${winnerName}</span>
+                    <button class="redraw-btn" title="缺席/重抽" onclick="reDraw(${pIndex}, ${realIndex}, '${winnerName}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                    </button>
+                `;
+                ul.appendChild(li);
+            });
+            group.appendChild(ul);
+            container.appendChild(group);
+        });
+    }
+
+    // --- 修改後的補抽邏輯 ---
+    function reDraw(pIndex, wIndex, name) {
+        showConfirm(`確定要移除「${name}」的中獎資格嗎？\n該員將被視為缺席，名額將釋出供重新抽獎。`, () => {
+            // 1. 移除該中獎者
+            state.prizes[pIndex].winners.splice(wIndex, 1);
+            
+            // 2. 重新計算目前該抽哪個獎 (因為該獎項名額未滿，會變回目前進度)
+            parsePrizeInputs();
+            
+            // 3. 更新介面
+            renderWinnersArea();
+            updateStageInfo();
+            
+            // 4. 提示主持人
+            showAlert(`已釋出「${state.prizes[pIndex].name}」的一個名額！\n請按下主畫面的抽獎按鈕來補抽。`);
+        });
+    }
+
+    function openBonusModal() { document.getElementById('bonus-modal').classList.add('active'); }
+    function closeBonusModal() { document.getElementById('bonus-modal').classList.remove('active'); }
+    
+    function confirmBonus() {
+        const name = document.getElementById('bonus-name').value;
+        const count = parseInt(document.getElementById('bonus-count').value);
+        if (!name || count <= 0) return showAlert("輸入有誤");
+
+        state.prizes.splice(state.currentPrizeIndex, 0, {
+            name: name, count: count, winners: []
+        });
+
+        closeBonusModal();
+        showAlert(`🎁 已加碼「${name}」！`);
+        renderPrizeInputs(); 
+        updateStageInfo();
+    }
+
+    function saveTemplate() {
+        const template = {
+            title: state.title,
+            colors: state.colors,
+            soundEnabled: state.soundEnabled,
+            prizes: state.prizes.map(p => ({ name: p.name, count: p.count, winners: [] }))
+        };
+        localStorage.setItem('luckyDrawTemplate', JSON.stringify(template));
+        document.getElementById('template-msg').innerText = "✅ 範本已儲存 (包含標題、配色、獎項設定)";
+        setTimeout(() => document.getElementById('template-msg').innerText = "", 3000);
+    }
+
+    function loadTemplate() {
+        const raw = localStorage.getItem('luckyDrawTemplate');
+        if (!raw) return showAlert("找不到儲存的範本");
+        
+        showConfirm("確定載入範本？目前的獎項設定將被覆蓋 (已產生的中獎名單會清空)", () => {
+             try {
+                const template = JSON.parse(raw);
+                state.title = template.title;
+                state.colors = template.colors;
+                state.soundEnabled = template.soundEnabled;
+                state.prizes = template.prizes;
+                state.currentPrizeIndex = 0; 
+                
+                document.getElementById('setting-title').value = state.title;
+                document.getElementById('setting-bg-color').value = state.colors.bg;
+                document.getElementById('setting-main-color').value = state.colors.primary;
+                if(state.colors.text) document.getElementById('setting-text-color').value = state.colors.text;
+                document.getElementById('setting-sound').checked = state.soundEnabled;
+                
+                // 清除背景圖以應用範本顏色
+                clearBgImage();
+
+                updateUI();
+                renderPrizeInputs();
+                renderWinnersArea();
+                updateStageInfo();
+                
+                showAlert("範本載入成功！");
+            } catch(e) {
+                showAlert("範本讀取錯誤");
+            }
+        });
+    }
+    
+    function clearTemplate() {
+        showConfirm("確定清除儲存的範本？", () => {
+            localStorage.removeItem('luckyDrawTemplate');
+            showAlert("已清除");
+        });
+    }
+
+    // --- 截圖與匯出功能 ---
+    function saveScreenshot() {
+        // 建立一個臨時容器來產生截圖
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.top = '0';
+        tempContainer.style.left = '0';
+        tempContainer.style.width = '100%';
+        tempContainer.style.zIndex = '-9999';
+        
+        // 修正：使用最強烈的白底黑字對比
+        tempContainer.style.backgroundColor = '#ffffff'; 
+        tempContainer.style.backgroundImage = 'none'; 
+        tempContainer.style.color = '#000000';
+        tempContainer.style.fontFamily = "'Microsoft JhengHei', 'Segoe UI', sans-serif"; // 確保中文字體清晰
+        
+        tempContainer.style.padding = '40px 30px'; 
+        tempContainer.style.display = 'flex';
+        tempContainer.style.flexDirection = 'column';
+        tempContainer.style.alignItems = 'center';
+
+        // 1. 複製標題 (H1)
+        const originalTitle = document.getElementById('main-title');
+        const titleClone = originalTitle.cloneNode(true);
+        titleClone.style.marginBottom = '30px';
+        titleClone.style.fontSize = '3rem'; // 字體加大
+        titleClone.style.fontWeight = '900'; // 字體加到最粗
+        titleClone.style.color = '#000000'; // 純黑
+        titleClone.style.textShadow = 'none'; 
+        tempContainer.appendChild(titleClone);
+
+        // 2. 複製中獎名單 (Winners)
+        const originalWinners = document.getElementById('winners-container');
+        const winnersClone = originalWinners.cloneNode(true);
+        
+        winnersClone.style.display = 'grid'; 
+        winnersClone.style.width = '100%';
+        winnersClone.style.maxWidth = '1000px'; 
+        winnersClone.style.gap = '20px'; // 增加間距
+        
+        // 針對截圖內的卡片進行「高強度」樣式強化
+        const cards = winnersClone.querySelectorAll('.prize-group');
+        cards.forEach(card => {
+            // 改為純白底、粗黑框
+            card.style.backgroundColor = '#ffffff'; 
+            card.style.border = '3px solid #000000'; // 加粗純黑邊框
+            card.style.boxShadow = 'none';
+            card.style.color = '#000000';
+            card.style.borderRadius = '8px';
+            
+            // 強化獎項標題
+            const header = card.querySelector('h3');
+            if (header) {
+                header.style.color = '#000000'; // 純黑
+                header.style.borderBottom = '3px solid #000000'; // 加粗純黑分隔線
+                header.style.fontSize = '1.8rem'; // 字體加大
+                header.style.fontWeight = '800'; // 加粗
+                header.style.paddingBottom = '10px';
+                header.style.marginBottom = '10px';
+            }
+
+            // 強化名單文字
+            const items = card.querySelectorAll('.winner-item');
+            items.forEach(item => {
+                item.style.color = '#000000'; // 純黑
+                item.style.fontWeight = '700'; // 加粗
+                item.style.borderBottom = '1px solid #555555'; // 深灰分隔線
+                item.style.fontSize = '1.4rem'; // 字體加大
+                item.style.padding = '12px 0';
+            });
+
+            // 移除截圖中的重抽按鈕
+            card.querySelectorAll('.redraw-btn').forEach(btn => btn.remove());
+        });
+        
+        tempContainer.appendChild(winnersClone);
+
+        // 將臨時容器加入 Body
+        document.body.appendChild(tempContainer);
+
+        // 使用 html2canvas 截圖
+        html2canvas(tempContainer, {
+            useCORS: true, 
+            scale: 2, // 高解析度
+            backgroundColor: '#ffffff'
+        }).then(canvas => {
+            document.body.removeChild(tempContainer);
+
+            canvas.toBlob(function(blob) {
+                if (!blob) return;
+
+                const link = document.createElement('a');
+                link.download = `中獎名單_${new Date().toISOString().slice(0,10)}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+
+                try {
+                    if (navigator.clipboard && navigator.clipboard.write) {
+                        const item = new ClipboardItem({ "image/png": blob });
+                        navigator.clipboard.write([item]).then(() => {
+                            showAlert("📸 截圖已下載，並成功複製到剪貼簿！\n(已增強文字深度與清晰度)");
+                        }).catch(err => {
+                            showAlert("📸 截圖已下載！\n(自動複製功能被瀏覽器阻擋)");
+                        });
+                    } else {
+                        showAlert("📸 截圖已下載！");
+                    }
+                } catch (e) {
+                    showAlert("📸 截圖已下載！");
+                }
+            }, 'image/png');
+        });
+    }
+
+    function exportCSV() {
+        let csvContent = "\uFEFF"; // BOM for Excel encoding
+        csvContent += "獎項,中獎者\n";
+        
+        state.prizes.forEach(prize => {
+            prize.winners.forEach(winner => {
+                // 處理 CSV 格式，避免名字中有逗號
+                const safeName = winner.includes(',') ? `"${winner}"` : winner;
+                csvContent += `${prize.name},${safeName}\n`;
+            });
+        });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        
+        // 產生檔名：活動主標題-中獎名單-日期-時間
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+        // 移除標題中不適合做檔名的字元
+        const safeTitle = state.title.replace(/[\\/:*?"<>|]/g, '');
+        
+        link.setAttribute("download", `${safeTitle}-中獎名單-${dateStr}-${timeStr}.csv`);
+        
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    function fireConfetti() {
+        var count = 200;
+        var defaults = { origin: { y: 0.7 } };
+        function fire(particleRatio, opts) {
+            confetti(Object.assign({}, defaults, opts, {
+                particleCount: Math.floor(count * particleRatio)
+            }));
+        }
+        fire(0.25, { spread: 26, startVelocity: 55 });
+        fire(0.2, { spread: 60 });
+        fire(0.35, { spread: 100, decay: 0.91, scalar: 0.8 });
+        fire(0.1, { spread: 120, startVelocity: 25, decay: 0.92, scalar: 1.2 });
+        fire(0.1, { spread: 120, startVelocity: 45 });
+    }
+</script>
+</body>
+</html>
