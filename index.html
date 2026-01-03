@@ -8,6 +8,8 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <!-- 匯入 html2canvas 截圖庫 (CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- 匯入 Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
     <style>
         :root {
             --main-bg-color: #f0f2f5;
@@ -15,6 +17,7 @@
             --primary-color: #3b82f6;
             --text-color: #1f2937;
             --accent-color: #ef4444;
+            --success-color: #10b981;
             --border-radius: 12px;
         }
 
@@ -38,50 +41,144 @@
         /* --- 頂部導航 --- */
         header {
             text-align: center;
-            padding: 1rem;
+            padding: 0.8rem 1rem;
             position: relative;
             background: rgba(255,255,255,0.85);
             backdrop-filter: blur(8px);
             box-shadow: 0 2px 10px rgba(0,0,0,0.05);
             z-index: 100;
             flex-shrink: 0;
-            border-radius: 0 0 16px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         h1 {
             margin: 0;
-            font-size: clamp(1.5rem, 4vw, 2.5rem);
+            font-size: clamp(1.2rem, 3vw, 2rem);
             color: var(--primary-color);
             font-weight: 800;
-            text-shadow: 2px 2px 4px rgba(255,255,255,0.5);
+            text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
         }
 
-        .settings-btn {
+        .header-controls {
             position: absolute;
-            top: 50%;
             right: 1.5rem;
-            transform: translateY(-50%);
+            display: flex;
+            gap: 10px;
+        }
+
+        .icon-btn {
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 1.8rem;
-            opacity: 0.7;
+            color: #64748b;
             transition: 0.3s;
+            padding: 8px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .settings-btn:hover { opacity: 1; transform: translateY(-50%) rotate(90deg); }
+        .icon-btn:hover { background-color: rgba(0,0,0,0.05); color: var(--primary-color); transform: scale(1.1); }
+        .icon-btn .material-icons { font-size: 24px; }
 
-        /* --- 主容器 --- */
+        /* --- 主容器 (Layout Grid) --- */
         .container {
             flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
             padding: 20px;
             overflow-y: auto;
             width: 100%;
             box-sizing: border-box;
+            
+            /* 預設版型 (單欄) */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
         }
+
+        /* --- 版型 2: 三欄式 (3-Column Layout) --- */
+        /* 修正：使用 15fr 70fr 15fr 達成 15%/70%/15% 比例 */
+        .container.layout-3-col {
+            display: grid;
+            grid-template-columns: 15fr 70fr 15fr; 
+            grid-template-rows: 100%; /* 讓子元素高度填滿容器，方便內部捲動 */
+            gap: 20px;
+            align-items: start; /* 向上對齊 */
+            overflow: hidden; 
+        }
+
+        /* 左側欄：待抽名單 */
+        .panel-left {
+            display: none; /* 預設隱藏 */
+            background: rgba(255,255,255,0.6);
+            border-radius: var(--border-radius);
+            padding: 15px;
+            height: 100%;
+            overflow-y: auto; /* 獨立捲動 */
+            border: 1px solid rgba(0,0,0,0.05);
+            box-sizing: border-box;
+        }
+        .container.layout-3-col .panel-left { display: flex; flex-direction: column; }
+
+        /* 中間欄：抽獎台 */
+        .panel-center {
+            width: 100%;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        /* 修正：移除垂直置中，改為向上對齊 */
+        .container.layout-3-col .panel-center {
+            max-width: none;
+            height: 100%;
+            overflow-y: auto; /* 允許中間區域內容捲動 */
+            justify-content: flex-start; 
+        }
+
+        /* 右側欄：中獎名單 */
+        .panel-right {
+            width: 90%;
+            max-width: 1000px;
+        }
+        .container.layout-3-col .panel-right {
+            width: 100%;
+            max-width: none;
+            height: 100%;
+            overflow-y: auto; /* 獨立捲動 */
+            padding-right: 5px;
+            box-sizing: border-box;
+        }
+
+        /* RWD 強制覆寫: 手機版強制回單欄 */
+        @media (max-width: 900px) {
+            .container.layout-3-col {
+                display: flex;
+                flex-direction: column;
+                overflow-y: auto;
+            }
+            .container.layout-3-col .panel-left { display: none; } /* 手機版隱藏待抽清單以免雜亂 */
+        }
+
+        /* --- 待抽名單樣式 --- */
+        .waiting-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .waiting-item {
+            padding: 8px 10px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            font-size: 0.95rem;
+            color: #64748b;
+            /* 長名字換行設定 */
+            white-space: normal;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+        .waiting-item:nth-child(odd) { background-color: rgba(255,255,255,0.3); }
 
         /* --- 抽獎主舞台 --- */
         .stage {
@@ -90,9 +187,8 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
             padding: 2rem;
             text-align: center;
-            width: 90%;
-            max-width: 800px;
-            margin-bottom: 2rem;
+            width: 100%;
+            box-sizing: border-box;
             border: 3px solid var(--primary-color);
             transition: all 0.3s;
             position: relative;
@@ -113,13 +209,17 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: rgba(248, 250, 252, 0.9); /* 稍微透明 */
+            background: rgba(248, 250, 252, 0.9);
             border-radius: 10px;
             margin: 1.5rem 0;
             overflow: hidden;
             color: var(--primary-color);
             text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
             border: 1px dashed #cbd5e1;
+            /* 滾動時名字太長也要換行或縮小，這邊先允許換行 */
+            padding: 0 10px;
+            word-break: break-word;
+            line-height: 1.1;
         }
 
         .controls {
@@ -153,22 +253,23 @@
 
         /* --- 工具列 --- */
         .toolbar {
-            width: 90%;
-            max-width: 1000px;
+            width: 100%;
             display: flex;
             justify-content: flex-end;
             gap: 10px;
-            margin-bottom: 10px;
         }
 
         /* --- 中獎名單區 --- */
         .winners-section {
-            width: 90%;
-            max-width: 1000px;
+            width: 100%;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 自適應卡片 */
+            gap: 1rem;
             padding-bottom: 2rem;
+        }
+        /* 在三欄模式下，中獎名單改為單欄垂直排列 */
+        .container.layout-3-col .winners-section {
+            grid-template-columns: 1fr;
         }
 
         .prize-group {
@@ -195,14 +296,43 @@
         .winner-item {
             display: flex;
             justify-content: space-between;
-            align-items: center;
+            align-items: center; /* 垂直置中 */
             padding: 10px 0;
             border-bottom: 1px dashed #eee;
             color: var(--text-color);
+            transition: 0.3s;
         }
         .winner-item:last-child { border-bottom: none; }
 
-        .winner-name { font-size: 1.2rem; font-weight: 600; }
+        /* 得獎者姓名互動樣式 (支援長名換行) */
+        .winner-name { 
+            font-size: 1.2rem; 
+            font-weight: 600; 
+            cursor: pointer;
+            padding: 6px 12px; /* 稍微增加內距讓它更像按鈕 */
+            border-radius: 6px;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            
+            /* 長名字處理 */
+            flex: 1; /* 佔據剩餘空間 */
+            white-space: normal; /* 允許換行 */
+            word-break: break-word; /* 單字過長可切斷 */
+            line-height: 1.3;
+            text-align: left;
+        }
+        .winner-name:hover { background-color: rgba(0,0,0,0.05); }
+        
+        /* 在場樣式 (綠色系) - 移除符號，僅保留顏色變化 */
+        .winner-present {
+            color: #047857 !important; /* 深綠色文字，確保對比清晰 */
+            background-color: #d1fae5; /* 淺綠色背景 */
+            border: 1px solid #10b981; /* 綠色邊框強化按鈕感 */
+            font-weight: 800;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
         
         .redraw-btn {
             background: #f3f4f6;
@@ -217,9 +347,11 @@
             justify-content: center;
             width: 36px;
             height: 36px;
+            flex-shrink: 0; /* 按鈕不被壓縮 */
+            margin-left: 10px;
         }
         .redraw-btn:hover { background-color: #fee2e2; color: #ef4444; border-color: #fecaca; }
-        .redraw-btn svg { width: 20px; height: 20px; }
+        .redraw-btn .material-icons { font-size: 20px; }
 
         /* --- Modal (通用) --- */
         .modal {
@@ -255,7 +387,7 @@
             justify-content: space-between;
             align-items: center;
             background: #f9fafb;
-            color: #1f2937; /* Modal 固定淺色背景，文字深色 */
+            color: #1f2937;
         }
         .modal-header h2 { margin: 0; font-size: 1.5rem; }
         .close-modal {
@@ -371,15 +503,6 @@
         }
         .help-box ol { margin: 0.5rem 0 0 1.2rem; padding: 0; }
 
-        /* RWD */
-        @media (max-width: 600px) {
-            .tabs { flex-direction: column; padding: 0; }
-            .tab-btn { width: 100%; text-align: left; border-bottom: 1px solid #eee; }
-            .tab-btn.active { border-bottom: 3px solid var(--primary-color); border-radius: 0; }
-            .controls { flex-direction: column; }
-            button { width: 100%; justify-content: center; }
-        }
-
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
@@ -394,44 +517,64 @@
 
 <header>
     <h1 id="main-title">年度活動摸彩大會</h1>
-    <button class="settings-btn" onclick="openSettings()" title="設定">⚙️</button>
+    <div class="header-controls">
+        <button class="icon-btn" onclick="toggleLayout()" title="切換版型 (單欄 / 三欄)">
+            <span class="material-icons">view_week</span>
+        </button>
+        <button class="icon-btn" onclick="openSettings()" title="設定">
+            <span class="material-icons">settings</span>
+        </button>
+    </div>
 </header>
 
-<div class="container" id="capture-area">
-    <!-- 抽獎舞台 -->
-    <div class="stage" id="main-stage">
-        <div class="current-prize-info" id="current-prize-display">準備中...</div>
-        <div class="rolling-display" id="rolling-box">等待開始</div>
-        
-        <div class="controls" data-html2canvas-ignore>
-            <button id="btn-draw-one" class="btn-primary" onclick="startDraw('one')">
-                <span>🎲</span> 逐一開獎
-            </button>
-            <button id="btn-draw-all" class="btn-secondary" onclick="startDraw('all')">
-                <span>🚀</span> 一次抽完本獎項
-            </button>
-            <button id="btn-bonus" class="btn-bonus" onclick="openBonusModal()">
-                <span>🎁</span> 臨時加碼
-            </button>
+<div class="container" id="main-container">
+    <!-- 左側面板 (待抽名單) -->
+    <div class="panel-left" id="panel-left">
+        <h3 style="margin-top:0; border-bottom:1px solid #ddd; padding-bottom:10px; color:var(--text-color);">
+            📊 待抽名單 (<span id="wait-count">0</span>)
+        </h3>
+        <ul id="waiting-list" class="waiting-list">
+            <!-- JS 動態生成 -->
+        </ul>
+    </div>
+
+    <!-- 中間面板 (抽獎台) -->
+    <div class="panel-center">
+        <div class="stage" id="main-stage">
+            <div class="current-prize-info" id="current-prize-display">準備中...</div>
+            <div class="rolling-display" id="rolling-box">等待開始</div>
+            
+            <div class="controls" data-html2canvas-ignore>
+                <button id="btn-draw-one" class="btn-primary" onclick="startDraw('one')">
+                    <span>🎲</span> 逐一開獎
+                </button>
+                <button id="btn-draw-all" class="btn-secondary" onclick="startDraw('all')">
+                    <span>🚀</span> 一次抽完本獎項
+                </button>
+                <button id="btn-bonus" class="btn-bonus" onclick="openBonusModal()">
+                    <span>🎁</span> 臨時加碼
+                </button>
+            </div>
+            <div style="margin-top: 15px; color: #6b7280; font-size: 0.9rem;">
+                剩餘名單人數: <span id="pool-count" style="font-weight:bold; color:var(--primary-color);">0</span> 人
+            </div>
         </div>
-        <div style="margin-top: 15px; color: #6b7280; font-size: 0.9rem;">
-            剩餘名單人數: <span id="pool-count" style="font-weight:bold; color:var(--primary-color);">0</span> 人
+
+        <div class="toolbar" data-html2canvas-ignore>
+            <button class="btn-info" onclick="saveScreenshot()">
+                📸 截圖存檔
+            </button>
+            <button class="btn-success" onclick="exportCSV()">
+                📊 匯出 CSV
+            </button>
         </div>
     </div>
 
-    <!-- 工具列 -->
-    <div class="toolbar" data-html2canvas-ignore>
-        <button class="btn-info" onclick="saveScreenshot()">
-            📸 截圖存檔
-        </button>
-        <button class="btn-success" onclick="exportCSV()">
-            📊 匯出 CSV
-        </button>
-    </div>
-
-    <!-- 中獎名單展示區 -->
-    <div class="winners-section" id="winners-container">
-        <!-- JS 動態生成 -->
+    <!-- 右側面板 (中獎名單) -->
+    <div class="panel-right" id="panel-right">
+        <div class="winners-section" id="winners-container">
+            <!-- JS 動態生成 -->
+        </div>
     </div>
 </div>
 
@@ -477,7 +620,7 @@
                         <div style="display:flex; gap:10px; margin-bottom:10px;">
                             <div style="flex:1;">
                                 <label>2. 工作表名稱</label>
-                                <input type="text" id="sheet-name-b" class="form-control" value="工作表1">
+                                <input type="text" id="sheet-name-b" class="form-control" value="表單回應 1">
                             </div>
                             <div style="flex:1;">
                                 <label>3. 名單欄位名稱</label>
@@ -679,7 +822,8 @@
             primary: "#3b82f6",
             text: "#1f2937",
             card: "#ffffff"
-        }
+        },
+        layout: "default" // default (single col) or 3-col
     };
 
     const audioRoll = document.getElementById('rolling-sound');
@@ -699,6 +843,37 @@
         
         switchTab('tab-list');
     };
+
+    // --- 版型切換功能 ---
+    function toggleLayout() {
+        const container = document.getElementById('main-container');
+        if (container.classList.contains('layout-3-col')) {
+            container.classList.remove('layout-3-col');
+            state.layout = "default";
+            showAlert("已切換為：標準版型 (適合手機/投影)");
+        } else {
+            container.classList.add('layout-3-col');
+            state.layout = "3-col";
+            showAlert("已切換為：三欄式寬螢幕版型 (待抽/抽獎/得獎)");
+            // 確保待抽名單有渲染
+            renderWaitingList();
+        }
+    }
+
+    function renderWaitingList() {
+        const listEl = document.getElementById('waiting-list');
+        const countEl = document.getElementById('wait-count');
+        
+        listEl.innerHTML = '';
+        countEl.innerText = state.namePool.length;
+
+        state.namePool.forEach(name => {
+            const li = document.createElement('li');
+            li.className = 'waiting-item';
+            li.innerText = name;
+            listEl.appendChild(li);
+        });
+    }
 
     // --- 系統對話框功能 (取代 alert/confirm) ---
     function showDialog(title, msg, showCancel, callback) {
@@ -938,6 +1113,7 @@
     function finalizeNameSet() {
         showAlert(`✅ 名單更新成功！目前共有 ${state.namePool.length} 人待抽。`);
         updateStageInfo();
+        renderWaitingList(); // 更新待抽名單面板
         closeSettings();
         document.getElementById('names-input').value = state.namePool.join('\n');
     }
@@ -954,7 +1130,7 @@
         let url, colName;
         if (type === 'shared') {
             const inputUrl = document.getElementById('sheet-url-b').value;
-            const sheetName = document.getElementById('sheet-name-b').value || '工作表1';
+            const sheetName = document.getElementById('sheet-name-b').value || '表單回應1';
             colName = document.getElementById('col-name-b').value;
             const match = inputUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
             if (!match) return showAlert("網址格式錯誤，請確認是 Google 試算表網址");
@@ -1106,6 +1282,7 @@
         }
 
         renderWinnersArea();
+        renderWaitingList(); // 更新待抽名單
 
         if (currentPrize.winners.length >= currentPrize.count) {
             state.currentPrizeIndex++;
@@ -1115,6 +1292,11 @@
             box.style.color = "var(--primary-color)";
             updateStageInfo();
         }, 3000);
+    }
+
+    // --- 得獎者狀態切換 ---
+    function togglePresence(element) {
+        element.classList.toggle('winner-present');
     }
 
     function renderWinnersArea() {
@@ -1131,14 +1313,13 @@
                 const realIndex = prize.winners.length - 1 - reverseIndex;
                 const li = document.createElement('li');
                 li.className = 'winner-item';
+                // 移除名字前的 icon，保留純文字點擊功能
                 li.innerHTML = `
-                    <span class="winner-name">🏆 ${winnerName}</span>
+                    <span class="winner-name" onclick="togglePresence(this)" title="點擊標記為在場 (變綠色)">
+                        ${winnerName}
+                    </span>
                     <button class="redraw-btn" title="缺席/重抽" onclick="reDraw(${pIndex}, ${realIndex}, '${winnerName}')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                        </svg>
+                        <span class="material-icons">refresh</span>
                     </button>
                 `;
                 ul.appendChild(li);
@@ -1276,6 +1457,7 @@
         winnersClone.style.width = '100%';
         winnersClone.style.maxWidth = '1000px'; 
         winnersClone.style.gap = '20px'; // 增加間距
+        winnersClone.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
         
         // 針對截圖內的卡片進行「高強度」樣式強化
         const cards = winnersClone.querySelectorAll('.prize-group');
@@ -1306,6 +1488,16 @@
                 item.style.borderBottom = '1px solid #555555'; // 深灰分隔線
                 item.style.fontSize = '1.4rem'; // 字體加大
                 item.style.padding = '12px 0';
+                
+                // 檢查是否已標記為在場 (截圖時若需要顯示狀態，可在此調整，目前依需求移除符號)
+                const nameSpan = item.querySelector('.winner-name');
+                if (nameSpan && nameSpan.classList.contains('winner-present')) {
+                    // 截圖為黑白高對比，我們可以用底線或斜體來稍微區隔，或者保持原樣
+                    // 依據您的需求「不需要加入符號」，這裡僅保持文字顯示
+                    nameSpan.style.color = '#000000'; 
+                    // 若希望截圖也能看出差異，可以取消下行註解加上底線：
+                    // nameSpan.style.textDecoration = 'underline';
+                }
             });
 
             // 移除截圖中的重抽按鈕
@@ -1353,13 +1545,14 @@
 
     function exportCSV() {
         let csvContent = "\uFEFF"; // BOM for Excel encoding
-        csvContent += "獎項,中獎者\n";
+        csvContent += "獎項,中獎者,狀態\n";
         
         state.prizes.forEach(prize => {
             prize.winners.forEach(winner => {
                 // 處理 CSV 格式，避免名字中有逗號
                 const safeName = winner.includes(',') ? `"${winner}"` : winner;
-                csvContent += `${prize.name},${safeName}\n`;
+                // 這裡簡單處理，暫不紀錄在場狀態到 CSV，若需可從 DOM 判斷
+                csvContent += `${prize.name},${safeName},已中獎\n`;
             });
         });
 
